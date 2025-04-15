@@ -32,7 +32,7 @@ PLATFORM              ?= PLATFORM_DESKTOP
 PROJECT_NAME          ?= cool_project
 PROJECT_VERSION       ?= 1.0
 PROJECT_BUILD_PATH    ?= .
-PROJECT_SOURCE_FILES  ?= cool_project.c
+PROJECT_SOURCE_FILES  ?= cool_project.c wallpaper_win32.c
 
 RAYLIB_PATH           ?= C:\raylib\raylib
 RAYLIB_INCLUDE_PATH   ?= $(RAYLIB_PATH)\include
@@ -315,7 +315,7 @@ OBJS = $(patsubst %.c, %.o, $(PROJECT_SOURCE_FILES))
 # Define processes to execute
 #------------------------------------------------------------------------------------------------
 # Default target entry
-all: desktop_access desktop_window_test
+all: $(PROJECT_NAME)
 
 # Project target defined by PROJECT_NAME
 $(PROJECT_NAME): $(OBJS)
@@ -352,10 +352,3 @@ ifeq ($(PLATFORM),PLATFORM_WEB)
 	del *.o *.html *.js
 endif
 	@echo Cleaning done
-
-desktop_access: desktop_access.c
-	$(CC) $(CFLAGS) -o desktop_access.exe desktop_access.c $(LDFLAGS)
-
-desktop_window_test: desktop_window_test.c
-	$(CC) $(CFLAGS) -o desktop_window_test.exe desktop_window_test.c $(LDFLAGS) -mwindows
-

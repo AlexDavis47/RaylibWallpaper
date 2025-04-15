@@ -1,6 +1,4 @@
 #include <windows.h>
-#include <stdio.h>
-#include <math.h>
 
 // Global variables
 HWND g_hwnd = NULL;
@@ -9,7 +7,6 @@ int g_screenWidth, g_screenHeight;
 HDC g_memDC = NULL;
 HBITMAP g_memBitmap = NULL;
 HINSTANCE g_hInstance = NULL;
-int g_animationOffset = 0;
 
 // Function prototypes
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -45,20 +42,12 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
 // Set up our window as a desktop wallpaper
 BOOL SetupWallpaper()
 {
-    // Create console window for debugging
-    AllocConsole();
-    FILE *pFile = NULL;
-    freopen_s(&pFile, "CONOUT$", "w", stdout);
-    printf("Attempting to set up wallpaper...\n");
-
     // Step 1: Find the Program Manager window
     HWND progman = FindWindow("Progman", NULL);
     if (!progman)
     {
-        printf("Failed to find Program Manager window!\n");
         return FALSE;
     }
-    printf("Found Program Manager: %p\n", progman);
 
     // Step 2: Send the special message to create the WorkerW window
     // The magic message is 0x052C with parameters 0xD and 0x1
@@ -74,26 +63,15 @@ BOOL SetupWallpaper()
 
     if (!data.WorkerW)
     {
-        printf("Failed to find WorkerW window!\n");
         return FALSE;
     }
 
-    printf("Found WorkerW window: %p\n", data.WorkerW);
-
     // Step 4: Set our window as a child of the WorkerW window
     SetWindowLongPtr(g_hwnd, GWL_STYLE, WS_VISIBLE | WS_POPUP | WS_CHILD);
-    HWND oldParent = SetParent(g_hwnd, data.WorkerW);
-    printf("Set parent result: Old parent %p, Error %d\n", oldParent, GetLastError());
+    SetParent(g_hwnd, data.WorkerW);
 
     // Step 5: Position our window to fill the entire WorkerW area
-    BOOL posResult = SetWindowPos(g_hwnd, HWND_BOTTOM,
-                                  0, 0, g_screenWidth, g_screenHeight,
-                                  SWP_SHOWWINDOW);
-
-    printf("SetWindowPos result: %d, Error: %d\n", posResult, GetLastError());
-
-    // Step 6: Refresh the window
-    InvalidateRect(g_hwnd, NULL, TRUE);
+    SetWindowPos(g_hwnd, HWND_BOTTOM, 0, 0, g_screenWidth, g_screenHeight, SWP_SHOWWINDOW);
 
     return TRUE;
 }
@@ -111,9 +89,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         g_memBitmap = CreateCompatibleBitmap(hdc, g_screenWidth, g_screenHeight);
         SelectObject(g_memDC, g_memBitmap);
         ReleaseDC(hwnd, hdc);
-
-        // Set a timer for animation
-        SetTimer(hwnd, 1, 50, NULL); // 20 FPS animation
         return 0;
     }
 
@@ -137,17 +112,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         EndPaint(hwnd, &ps);
         return 0;
     }
-
-    case WM_TIMER:
-        // For animation
-        g_animationOffset = (g_animationOffset + 1) % 100;
-        InvalidateRect(hwnd, NULL, FALSE);
-        return 0;
-
-    // Keep this for debugging so we know if the window is receiving mouse events
-    case WM_LBUTTONDOWN:
-        printf("Mouse clicked at %d, %d\n", LOWORD(lParam), HIWORD(lParam));
-        return 0;
     }
 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
@@ -158,62 +122,14 @@ void RenderFrame()
 {
     RECT rect = {0, 0, g_screenWidth, g_screenHeight};
 
-    // Fill with dark blue background
-    FillRect(g_memDC, &rect, CreateSolidBrush(RGB(0, 40, 80)));
+    // Fill with a solid color background
+    FillRect(g_memDC, &rect, CreateSolidBrush(RGB(0, 100, 200)));
 
-    // Draw some animated circles
-    for (int i = 0; i < 20; i++)
-    {
-        int radius = 30 + i * 5;
-        int x = g_screenWidth / 2 + cos((g_animationOffset + i * 18) * 0.03) * (g_screenWidth / 3);
-        int y = g_screenHeight / 2 + sin((g_animationOffset + i * 18) * 0.03) * (g_screenHeight / 3);
-
-        HBRUSH brush = CreateSolidBrush(RGB(i * 12, 255 - i * 10, 128 + i * 6));
-        HPEN pen = CreatePen(PS_SOLID, 2, RGB(255, 255, 255));
-
-        HBRUSH oldBrush = SelectObject(g_memDC, brush);
-        HPEN oldPen = SelectObject(g_memDC, pen);
-
-        Ellipse(g_memDC, x - radius, y - radius, x + radius, y + radius);
-
-        SelectObject(g_memDC, oldBrush);
-        SelectObject(g_memDC, oldPen);
-        DeleteObject(brush);
-        DeleteObject(pen);
-    }
-
-    // Draw text
-    SetBkMode(g_memDC, TRANSPARENT);
-    SetTextColor(g_memDC, RGB(255, 255, 255));
-
-    // Current time
-    SYSTEMTIME st;
-    GetLocalTime(&st);
-
-    char buffer[256];
-    sprintf(buffer, "LIVELY WALLPAPER DEMO\n%02d:%02d:%02d",
-            st.wHour, st.wMinute, st.wSecond);
-
-    // Use a large font
-    HFONT hFont = CreateFont(48, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                             ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                             ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Arial");
-    HFONT hOldFont = SelectObject(g_memDC, hFont);
-
-    // Draw text with shadow
-    RECT textRect = rect;
-    OffsetRect(&textRect, 3, 3);
-    SetTextColor(g_memDC, RGB(0, 0, 0));
-    DrawText(g_memDC, buffer, -1, &textRect, DT_CENTER | DT_VCENTER);
-
-    // Draw main text
-    OffsetRect(&textRect, -3, -3);
-    SetTextColor(g_memDC, RGB(255, 255, 255));
-    DrawText(g_memDC, buffer, -1, &textRect, DT_CENTER | DT_VCENTER);
-
-    // Cleanup
-    SelectObject(g_memDC, hOldFont);
-    DeleteObject(hFont);
+    // Draw a simple rectangle to show it's working
+    HBRUSH brush = CreateSolidBrush(RGB(255, 100, 100));
+    SelectObject(g_memDC, brush);
+    Rectangle(g_memDC, 100, 100, g_screenWidth - 100, g_screenHeight - 100);
+    DeleteObject(brush);
 }
 
 // Clean up resources
@@ -235,7 +151,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_screenHeight = GetSystemMetrics(SM_CYSCREEN);
 
     // Register window class
-    const char CLASS_NAME[] = "LivelyWallpaperClass";
+    const char CLASS_NAME[] = "SimpleWallpaperClass";
 
     WNDCLASS wc = {0};
     wc.lpfnWndProc = WindowProc;
@@ -248,9 +164,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // Create the window - initially we create it as a normal popup window
     g_hwnd = CreateWindowEx(
-        0,                             // Extended window style (no special style)
+        0,                             // Extended window style
         CLASS_NAME,                    // Class name
-        "Lively Wallpaper Demo",       // Window title
+        "Simple Wallpaper",            // Window title
         WS_POPUP,                      // Window style
         0, 0,                          // Position
         g_screenWidth, g_screenHeight, // Size
@@ -262,7 +178,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     if (!g_hwnd)
     {
-        MessageBox(NULL, "Failed to create window!", "Error", MB_OK | MB_ICONERROR);
         return 1;
     }
 
@@ -271,10 +186,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     UpdateWindow(g_hwnd);
 
     // Set up as wallpaper
-    if (!SetupWallpaper())
-    {
-        MessageBox(NULL, "Failed to set up as wallpaper!", "Error", MB_OK | MB_ICONERROR);
-    }
+    SetupWallpaper();
 
     // Message loop
     MSG msg = {0};
